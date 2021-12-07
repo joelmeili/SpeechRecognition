@@ -1,2 +1,4 @@
 data/*
 raw_data/*
+SEALMP4/app/build/outputs/apk/*
+SEALMP4/app/src/main/assets/*

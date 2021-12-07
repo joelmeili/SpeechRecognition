@@ -1,5 +1,7 @@
 # importing packages
-import os, glob
+import os, glob, math, random
+import numpy as np
+from scipy.io.wavfile import write
 from itertools import chain
 from pydub import AudioSegment
 
@@ -16,6 +18,7 @@ for subject in subjects:
         os.makedirs("../data/" + subject)
         os.makedirs("../data/" + subject + "/read/")
         os.makedirs("../data/" + subject + "/sing/")
+        os.makedirs("../data/" + subject + "/silent/")
 
 # getting all relevant data files
 speaking_files = [glob.glob(raw_path + subject + "/read/*.wav") for subject in subjects]
@@ -37,3 +40,23 @@ def process_audio_file(audio_file):
     
 for audio_file in audio_files:
     process_audio_file(audio_file)
+    
+# create random noise to simulate silent input
+SEEDS = [2021 + i for i in range(0, len(subjects))]
+SEEDS = dict(zip(subjects, SEEDS))
+
+def white_noise(subject):
+    np.random.seed(SEEDS[subject])
+    
+    for i in range(1, 5):
+        path = "../data/" + subject  + "/silent/0" + str(i) + ".wav"
+        noise = np.random.normal(0, 1, 88200)
+        noise = np.sin(2.0 * np.pi * noise)
+        write(filename = path, rate = 44100, data = noise.astype(np.int16))
+        audio = AudioSegment.from_wav(path)
+        audio = audio.set_frame_rate(44100)
+        audio = audio.set_sample_width(2)
+        audio.export(path, format = "wav", bitrate = "16k")
+    
+for subject in subjects:
+    white_noise(subject)

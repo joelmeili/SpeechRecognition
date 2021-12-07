@@ -11,15 +11,19 @@ subjects = os.listdir(path)
 SAMPLING_RATE = 44100
 
 # getting all relevant data files
+silent_files = [glob.glob(path + subject + "/silent/*.wav") for subject in subjects]
+silent_files = list(chain(*silent_files))
+
 speaking_files = [glob.glob(path + subject + "/read/*.wav") for subject in subjects]
 speaking_files = list(chain(*speaking_files))
 
 singing_files = [glob.glob(path + subject + "/sing/*.wav") for subject in subjects]
 singing_files = list(chain(*singing_files))
 
-audio_files = speaking_files + singing_files
-labels = ["speaking"]* len(speaking_files) + ["singing"] * len(singing_files)
-labels = [1 if label == "singing" else 0 for label in labels]
+audio_files = silent_files + speaking_files + singing_files
+class_names = ["silent", "speaking", "singing"]
+labels = ["silent"] * len(silent_files) + ["speaking"] * len(speaking_files) + ["singing"] * len(singing_files)
+labels = [0 if label == "silent" else 1 if label == "speaking" else 2 for label in labels]
 
 # shuffling the data
 SHUFFLE_SEED = 2021
@@ -29,9 +33,9 @@ rng = np.random.RandomState(SHUFFLE_SEED)
 rng.shuffle(labels)
 
 # determining percentage of validation split
-VALID_SPLIT = 0.2
+VALID_SPLIT = 0.3
 BATCH_SIZE = 128
-EPOCHS = 50
+EPOCHS = 30
 
 # generating data set
 def paths_and_labels_to_dataset(audio_paths, labels):
@@ -43,10 +47,9 @@ def paths_and_labels_to_dataset(audio_paths, labels):
 
 def path_to_audio(path):
     audio = tf.io.read_file(path)
-    audio, _ = tf.audio.decode_wav(audio, 1, SAMPLING_RATE)
+    audio, _ = tf.audio.decode_wav(audio, 1, 2 * SAMPLING_RATE)
     
     return audio
-
 
 def audio_to_fft(audio):
     audio = tf.squeeze(audio, axis = -1)
@@ -70,6 +73,7 @@ train_ds = paths_and_labels_to_dataset(train_audio_files, train_labels)
 train_ds = train_ds.shuffle(buffer_size = BATCH_SIZE * 8, seed = SHUFFLE_SEED).batch(
     BATCH_SIZE
 )
+
 valid_ds = paths_and_labels_to_dataset(valid_audio_files, valid_labels)
 valid_ds = valid_ds.shuffle(buffer_size = 32 * 8, seed = SHUFFLE_SEED).batch(32)
 
@@ -116,29 +120,26 @@ def build_model(input_shape, num_classes):
     return keras.models.Model(inputs = inputs, outputs = outputs)
 
 # run model
-model = build_model((SAMPLING_RATE // 2, 1), 2)
-
+model = build_model((SAMPLING_RATE, 1), len(class_names))
 model.summary()
 
-# Compile the model using Adam's default learning rate
+# compiling the model using Adam's default learning rate
 model.compile(
     optimizer = "Adam", loss = "sparse_categorical_crossentropy", metrics = ["accuracy"]
 )
 
-# run ML
+# running the model
 history = model.fit(
     train_ds,
     epochs = EPOCHS,
     validation_data = valid_ds
 )
 
-# model evaluation on the validation data set
-print(model.evaluate(valid_ds))
-
-# save model
-model.save("../trained_model.h5")
+# saving the  model
+model_path = "../SEALMP4/app/src/main/assets/"
+model.save(model_path + "trained_model.h5")
 converter = lite.TFLiteConverter.from_keras_model(model)
 tfmodel = converter.convert()
 
-with open("../trained_model.tflite", "wb") as f:
+with open(model_path + "trained_model.tflite", "wb") as f:
     f.write(tfmodel)
